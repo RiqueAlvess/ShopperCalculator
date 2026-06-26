@@ -98,16 +98,22 @@ export default function History() {
 }
 
 function RideCard({ ride }) {
-  const ok   = ride.decision === 'aceitou'
-  const time = new Date(ride.timestamp).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})
+  const ok      = ride.decision === 'aceitou'
+  const boosted = ride.boosted === true
+  const time    = new Date(ride.timestamp).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})
   return (
-    <div className="bg-uber-surface rounded-2xl p-4 border border-uber-border">
+    <div className={`bg-uber-surface rounded-2xl p-4 border ${boosted ? 'border-amber-700/50' : 'border-uber-border'}`}>
       <div className="flex justify-between items-start">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${ok ? 'bg-uber-green/15 text-uber-green' : 'bg-uber-red/15 text-uber-red'}`}>
               {ok ? 'ACEITA' : 'REJEITADA'}
             </span>
+            {boosted && (
+              <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-amber-900/40 text-amber-400 flex items-center gap-1">
+                🔥 Impulsionado
+              </span>
+            )}
             <span className="text-[11px] text-uber-muted">{time}</span>
           </div>
           {ride.store && <p className="text-white font-semibold text-sm mb-1">{ride.store}</p>}
