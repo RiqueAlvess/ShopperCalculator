@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getAllSettings, saveSetting } from '../lib/db'
+import { adjustedCosts } from '../lib/costBuffers'
 
 const DEFAULTS = {
   gasPrice: 3.50,
@@ -28,7 +29,12 @@ export function useSettings() {
     setSettings((prev) => ({ ...prev, [key]: parsed }))
   }, [])
 
-  const costPerMile = settings.gasPrice / settings.mpg
+  const costs = adjustedCosts(
+    settings.gasPrice,
+    settings.mpg,
+    settings.maintenanceCost,
+    settings.maintenanceFreqMonths,
+  )
 
-  return { settings, updateSetting, costPerMile, loaded }
+  return { settings, updateSetting, costs, loaded }
 }

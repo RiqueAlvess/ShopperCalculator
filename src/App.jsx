@@ -9,7 +9,7 @@ import { useSettings } from './hooks/useSettings'
 
 export default function App() {
   const [tab, setTab] = useState('dashboard')
-  const { settings, updateSetting, costPerMile, loaded } = useSettings()
+  const { settings, updateSetting, costs, loaded } = useSettings()
 
   if (!loaded) {
     return (
@@ -27,10 +27,10 @@ export default function App() {
       <div className="max-w-lg mx-auto flex flex-col" style={{ minHeight: '100dvh' }}>
         <TopBar tab={tab} />
         <div className="flex-1 overflow-y-auto pb-20">
-          {tab === 'dashboard'   && <Dashboard settings={settings} />}
-          {tab === 'calculator'  && <Calculator costPerMile={costPerMile} />}
-          {tab === 'history'     && <History />}
-          {tab === 'settings'    && <Settings settings={settings} updateSetting={updateSetting} costPerMile={costPerMile} />}
+          {tab === 'dashboard'  && <Dashboard settings={settings} />}
+          {tab === 'calculator' && <Calculator costs={costs} />}
+          {tab === 'history'    && <History />}
+          {tab === 'settings'   && <Settings settings={settings} updateSetting={updateSetting} costs={costs} />}
         </div>
         <BottomNav active={tab} onChange={setTab} />
       </div>

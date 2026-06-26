@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { adjustedCosts, GAS_BUFFER, MAINTENANCE_BUFFER } from '../lib/costBuffers'
 
-export default function Settings({ settings, updateSetting, costPerMile }) {
+export default function Settings({ settings, updateSetting, costs }) {
   const [local, setLocal] = useState({ ...settings })
   const [saved, setSaved] = useState(false)
 
@@ -14,7 +15,14 @@ export default function Settings({ settings, updateSetting, costPerMile }) {
   }
 
   const set = (k, v) => setLocal((p) => ({ ...p, [k]: v }))
-  const localCpm = (local.gasPrice / local.mpg) || 0
+
+  // Live-preview adjusted costs as user types (before saving)
+  const preview = adjustedCosts(
+    parseFloat(local.gasPrice)             || 0,
+    parseFloat(local.mpg)                  || 1,
+    parseFloat(local.maintenanceCost)      || 0,
+    parseFloat(local.maintenanceFreqMonths)|| 1,
+  )
 
   return (
     <div className="p-4 space-y-5 pb-6">
@@ -25,12 +33,32 @@ export default function Settings({ settings, updateSetting, costPerMile }) {
         <SettingInput label="Custo de Manutenção"           prefix="$"     value={local.maintenanceCost}        onChange={(v) => set('maintenanceCost', v)} />
         <SettingInput label="Frequência de Manutenção"      suffix="meses" value={local.maintenanceFreqMonths}  onChange={(v) => set('maintenanceFreqMonths', v)} />
 
-        <div className="flex items-center justify-between bg-neon-green/8 border border-neon-green/25 rounded-xl p-4 mt-1">
-          <div>
-            <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-wider">Custo por Milha</p>
-            <p className="text-xs text-gray-600 mt-0.5">Calculado automaticamente</p>
+        {/* Adjusted cost preview */}
+        <div className="bg-graphite-700 rounded-xl border border-graphite-500 p-4 space-y-2.5 mt-1">
+          <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest">Custo por Milha Protegido</p>
+
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-400">Combustível</span>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-600 line-through text-xs">${preview.rawCostPerMile.toFixed(4)}</span>
+              <span className="text-yellow-400 font-semibold">${preview.fuelPerMile.toFixed(4)}</span>
+              <BufferBadge pct={GAS_BUFFER} />
+            </div>
           </div>
-          <span className="text-neon-green font-black text-2xl">${localCpm.toFixed(4)}</span>
+
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-400">Manutenção</span>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-600 text-xs">+</span>
+              <span className="text-yellow-400 font-semibold">${preview.maintPerMile.toFixed(4)}</span>
+              <BufferBadge pct={MAINTENANCE_BUFFER} />
+            </div>
+          </div>
+
+          <div className="border-t border-graphite-600 pt-2 flex justify-between items-center">
+            <span className="text-sm text-gray-300 font-semibold">Total / milha</span>
+            <span className="text-neon-green font-black text-xl">${preview.totalCostPerMile.toFixed(4)}</span>
+          </div>
         </div>
       </Section>
 
@@ -52,16 +80,30 @@ export default function Settings({ settings, updateSetting, costPerMile }) {
         {saved ? 'CONFIGURAÇÕES SALVAS ✓' : 'SALVAR CONFIGURAÇÕES'}
       </button>
 
-      {/* Formula reference */}
-      <div className="bg-graphite-800 rounded-2xl p-4 border border-graphite-600 space-y-2">
-        <div className="flex items-center gap-2 mb-3">
+      {/* Buffer rationale */}
+      <div className="bg-graphite-800 rounded-2xl p-4 border border-graphite-600 space-y-3">
+        <div className="flex items-center gap-2">
           <InfoIcon />
-          <p className="text-sm font-semibold text-gray-300">Como funciona a fórmula</p>
+          <p className="text-sm font-semibold text-gray-300">Por que esses buffers?</p>
         </div>
-        <FormulaRow label="Custo por Milha"       value="Gas ÷ MPG" />
-        <FormulaRow label="Breakeven"              value="(mi × 1.31) + (itens × $0.60)" />
-        <FormulaRow label="Mínimo Recomendado"     value="Breakeven × 1.15  (margem 15%)" />
-        <p className="text-[11px] text-gray-600 pt-1">Todos os dados são salvos localmente no dispositivo e funcionam sem internet.</p>
+        <BufferExplain
+          label="Gasolina"
+          pct={GAS_BUFFER}
+          why="Preços de varejo oscilam ±8–18% sazonalmente (fonte: EIA). Um spike de refinery pode subir 10% numa semana."
+        />
+        <BufferExplain
+          label="Manutenção"
+          pct={MAINTENANCE_BUFFER}
+          why="Peças automotivas subiram +7,9% ao ano de 2022–2024 (fonte: BLS CPI). Mão-de-obra independente +5–7% a.a."
+        />
+        <div className="border-t border-graphite-600 pt-3 space-y-2">
+          <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest">Fórmula</p>
+          <FormulaRow label="Custo Combustível/mi" value="(Gas × 1.12) ÷ MPG" />
+          <FormulaRow label="Custo Manutenção/mi"  value="(Manutenção × 1.08) ÷ freq ÷ 1.050 mi/mês" />
+          <FormulaRow label="Breakeven"             value="(mi × 1.31) + (itens × $0.60)" />
+          <FormulaRow label="Mínimo Recomendado"    value="Breakeven × 1.15  (margem 15%)" />
+        </div>
+        <p className="text-[10px] text-gray-600">Dados salvos localmente — funciona 100% offline.</p>
       </div>
     </div>
   )
@@ -103,6 +145,26 @@ function FormulaRow({ label, value }) {
     <div className="flex flex-col gap-0.5">
       <span className="text-[11px] text-gray-500 font-semibold">{label}</span>
       <span className="text-xs text-gray-300 font-mono">{value}</span>
+    </div>
+  )
+}
+
+function BufferBadge({ pct }) {
+  return (
+    <span className="text-[10px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/25 rounded px-1.5 py-0.5 font-bold">
+      +{Math.round(pct * 100)}%
+    </span>
+  )
+}
+
+function BufferExplain({ label, pct, why }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-300 font-medium">{label}</span>
+        <BufferBadge pct={pct} />
+      </div>
+      <p className="text-[11px] text-gray-600 leading-snug">{why}</p>
     </div>
   )
 }

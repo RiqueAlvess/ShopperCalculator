@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { saveRide } from '../lib/db'
+import { GAS_BUFFER, MAINTENANCE_BUFFER } from '../lib/costBuffers'
 
-const fmt = (n) => Math.abs(n).toFixed(2)
+const fmt    = (n) => Math.abs(n).toFixed(2)
+const fmtPct = (r) => `+${Math.round(r * 100)}%`
 
-export default function Calculator({ costPerMile }) {
+export default function Calculator({ costs }) {
   const [form, setForm] = useState({ offered: '', miles: '', items: '', extraMiles: '', store: '' })
   const [result, setResult] = useState(null)
-  const [saved, setSaved] = useState(null)
+  const [saved,  setSaved]  = useState(null)
+  const [showCosts, setShowCosts] = useState(false)
 
   const set = (k, v) => { setForm((p) => ({ ...p, [k]: v })); setResult(null); setSaved(null) }
 
@@ -17,17 +20,15 @@ export default function Calculator({ costPerMile }) {
     const extra      = parseFloat(form.extraMiles) || 0
     const totalMiles = miles + extra
 
-    const fuelCost      = totalMiles * costPerMile
+    // Use buffered total cost per mile (fuel + maintenance, with inflation guard)
+    const rideCost      = totalMiles * costs.totalCostPerMile
     const breakeven     = totalMiles * 1.31 + items * 0.6
     const minWithMargin = breakeven * 1.15
     const accept        = offered >= minWithMargin
+    const netAfterCost  = offered - rideCost
+    const vsMinimum     = offered - minWithMargin
 
-    // Net after fuel only — shown as context, never as "guaranteed income"
-    const netAfterFuel = offered - fuelCost
-    // Surplus vs minimum (positive = how much above minimum; negative = deficit)
-    const vsMinimum    = offered - minWithMargin
-
-    setResult({ offered, miles, items, extra, totalMiles, fuelCost, breakeven, minWithMargin, accept, netAfterFuel, vsMinimum })
+    setResult({ offered, miles, items, extra, totalMiles, rideCost, breakeven, minWithMargin, accept, netAfterCost, vsMinimum })
     setSaved(null)
   }
 
@@ -35,30 +36,77 @@ export default function Calculator({ costPerMile }) {
     if (!result) return
     const now  = new Date()
     const ride = {
-      timestamp: now.toISOString(),
-      date:      now.toISOString().slice(0, 10),
-      offered:   result.offered,
-      miles:     result.miles,
-      items:     result.items,
+      timestamp:  now.toISOString(),
+      date:       now.toISOString().slice(0, 10),
+      offered:    result.offered,
+      miles:      result.miles,
+      items:      result.items,
       extraMiles: result.extra,
-      store:     form.store.trim(),
-      profit:    result.netAfterFuel,
+      store:      form.store.trim(),
+      profit:     result.netAfterCost,
       decision,
     }
     await saveRide(ride)
     setSaved(decision)
   }
 
-  const reset = () => { setForm({ offered: '', miles: '', items: '', extraMiles: '', store: '' }); setResult(null); setSaved(null) }
+  const reset = () => {
+    setForm({ offered: '', miles: '', items: '', extraMiles: '', store: '' })
+    setResult(null)
+    setSaved(null)
+  }
 
   return (
     <div className="p-4 space-y-4">
+      {/* Cost-per-mile pill — always visible */}
+      <button
+        onClick={() => setShowCosts((v) => !v)}
+        className="w-full flex items-center justify-between bg-graphite-800 border border-graphite-600 rounded-xl px-4 py-2.5 text-sm hover:border-neon-green/40 transition-colors"
+      >
+        <span className="text-gray-400">Custo/milha protegido</span>
+        <div className="flex items-center gap-2">
+          <span className="text-neon-green font-bold">${costs.totalCostPerMile.toFixed(4)}</span>
+          <ChevronIcon open={showCosts} />
+        </div>
+      </button>
+
+      {/* Expandable cost breakdown */}
+      {showCosts && (
+        <div className="bg-graphite-800 rounded-xl border border-graphite-600 p-4 space-y-3 animate-fade-in">
+          <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest">Composição do Custo por Milha</p>
+
+          <CostRow
+            label="Combustível"
+            raw={costs.rawCostPerMile}
+            adj={costs.fuelPerMile}
+            buffer={GAS_BUFFER}
+            reason="Oscilação semanal de preço da gasolina (EIA: ±8–18% sazonalmente)"
+          />
+          <CostRow
+            label="Manutenção"
+            raw={0}
+            adj={costs.maintPerMile}
+            buffer={MAINTENANCE_BUFFER}
+            reason="Inflação de peças automotivas + mão-de-obra (BLS CPI: +7,9% a.a. 2022–2024)"
+            rawLabel="não incluso antes"
+          />
+
+          <div className="border-t border-graphite-600 pt-3 flex justify-between items-center">
+            <span className="text-xs font-bold text-gray-300">Total por milha</span>
+            <div className="text-right">
+              <span className="text-neon-green font-black text-lg">${costs.totalCostPerMile.toFixed(4)}</span>
+              <p className="text-[10px] text-gray-600">base real: ${costs.rawCostPerMile.toFixed(4)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Input card */}
       <div className="bg-graphite-800 rounded-2xl p-4 space-y-3 border border-graphite-600 shadow-lg">
-        <InputField label="Valor Oferecido ($)" prefix="$"   value={form.offered}    onChange={(v) => set('offered', v)}    placeholder="0.00"              type="number" />
-        <InputField label="Milhas da Corrida"   suffix="mi"  value={form.miles}      onChange={(v) => set('miles', v)}      placeholder="0.0"               type="number" />
-        <InputField label="Quantidade de Itens"              value={form.items}      onChange={(v) => set('items', v)}      placeholder="0"                 type="number" />
-        <InputField label="Deslocamento Extra (opcional)" suffix="mi" value={form.extraMiles} onChange={(v) => set('extraMiles', v)} placeholder="0.0"     type="number" />
+        <InputField label="Valor Oferecido ($)" prefix="$"   value={form.offered}    onChange={(v) => set('offered', v)}    placeholder="0.00"                 type="number" />
+        <InputField label="Milhas da Corrida"   suffix="mi"  value={form.miles}      onChange={(v) => set('miles', v)}      placeholder="0.0"                  type="number" />
+        <InputField label="Quantidade de Itens"              value={form.items}      onChange={(v) => set('items', v)}      placeholder="0"                    type="number" />
+        <InputField label="Deslocamento Extra (opcional)" suffix="mi" value={form.extraMiles} onChange={(v) => set('extraMiles', v)} placeholder="0.0"        type="number" />
         <InputField label="Nome do Mercado (opcional)"       value={form.store}      onChange={(v) => set('store', v)}      placeholder="ex: Smith's, Target…" type="text" />
 
         <button
@@ -73,14 +121,13 @@ export default function Calculator({ costPerMile }) {
         <div className="space-y-3 animate-fade-in">
           {/* Verdict banner */}
           <div className={`rounded-2xl px-5 py-6 border-2 text-center ${result.accept
-            ? 'bg-green-950/60 border-neon-green shadow-[0_0_30px_rgba(57,255,20,0.2)]'
-            : 'bg-red-950/60  border-red-500  shadow-[0_0_30px_rgba(239,68,68,0.2)]'
+            ? 'bg-green-950/60 border-neon-green shadow-[0_0_30px_rgba(57,255,20,0.18)]'
+            : 'bg-red-950/60  border-red-500  shadow-[0_0_30px_rgba(239,68,68,0.18)]'
           }`}>
             <div className="text-4xl mb-2">{result.accept ? '🔥' : '🚫'}</div>
             <div className={`text-2xl font-black tracking-tight ${result.accept ? 'text-neon-green' : 'text-red-400'}`}>
               {result.accept ? 'ZONA QUENTE: ACEITAR!' : 'ZONA FRIA: REJEITAR!'}
             </div>
-            {/* Key number — what actually matters */}
             <div className="mt-3">
               {result.accept ? (
                 <div className="bg-neon-green/10 rounded-xl px-4 py-2 inline-block">
@@ -99,19 +146,21 @@ export default function Calculator({ costPerMile }) {
           {/* Breakdown */}
           <div className="bg-graphite-800 rounded-2xl p-4 space-y-2.5 border border-graphite-600">
             <p className="text-[11px] text-gray-500 font-semibold uppercase tracking-widest mb-3">Detalhes do Cálculo</p>
-            <Row label="Valor Oferecido"           value={`$${fmt(result.offered)}`}      color="white" />
-            <Row label="Custo de Combustível"      value={`−$${fmt(result.fuelCost)}`}     color="dim" />
-            <Row label="Breakeven (custo base)"    value={`$${fmt(result.breakeven)}`}     color="dim" />
-            <Row label="Mínimo c/ margem 15%"      value={`$${fmt(result.minWithMargin)}`} color="yellow" />
+            <Row label="Valor Oferecido"             value={`$${fmt(result.offered)}`}       color="white" />
+            <Row
+              label={`Custo Real da Corrida (${result.totalMiles.toFixed(1)} mi)`}
+              value={`−$${fmt(result.rideCost)}`}
+              color="dim"
+              hint={`combustível + manutenção com proteção de inflação`}
+            />
+            <Row label="Breakeven (custo base mín.)" value={`$${fmt(result.breakeven)}`}     color="dim" />
+            <Row label="Mínimo c/ margem 15%"        value={`$${fmt(result.minWithMargin)}`} color="yellow" />
             <div className="border-t border-graphite-600 pt-2.5 mt-1">
               <Row
-                label="Lucro após combustível"
-                value={`${result.netAfterFuel >= 0 ? '+' : '−'}$${fmt(result.netAfterFuel)}`}
-                color={result.netAfterFuel >= 0 ? 'dim-green' : 'red'}
+                label="Resultado após todos os custos"
+                value={`${result.netAfterCost >= 0 ? '+' : '−'}$${fmt(result.netAfterCost)}`}
+                color={result.netAfterCost >= 0 ? 'green' : 'red'}
               />
-              <p className="text-[10px] text-gray-600 mt-1">
-                * Lucro bruto estimado apenas descontando combustível — não considera tempo, desgaste e margem mínima
-              </p>
             </div>
           </div>
 
@@ -149,6 +198,28 @@ export default function Calculator({ costPerMile }) {
   )
 }
 
+/* ── Sub-components ── */
+
+function CostRow({ label, raw, adj, buffer, reason, rawLabel }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between items-center">
+        <span className="text-sm text-gray-300 font-medium">{label}</span>
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-gray-600 line-through text-xs">
+            {rawLabel ?? `$${raw.toFixed(4)}`}
+          </span>
+          <span className="text-yellow-400 font-bold">${adj.toFixed(4)}</span>
+          <span className="text-[10px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/30 rounded px-1.5 py-0.5 font-bold">
+            {fmtPct(buffer)}
+          </span>
+        </div>
+      </div>
+      <p className="text-[10px] text-gray-600 leading-snug">{reason}</p>
+    </div>
+  )
+}
+
 function InputField({ label, value, onChange, placeholder, type, prefix, suffix }) {
   return (
     <div>
@@ -169,34 +240,36 @@ function InputField({ label, value, onChange, placeholder, type, prefix, suffix 
   )
 }
 
-function Row({ label, value, color }) {
+function Row({ label, value, color, hint }) {
   const cls = {
-    white:      'text-white font-semibold',
-    dim:        'text-gray-400',
-    yellow:     'text-yellow-400 font-bold',
-    'dim-green':'text-neon-green/70 font-semibold',
-    red:        'text-red-400 font-semibold',
+    white:  'text-white font-semibold',
+    dim:    'text-gray-400',
+    yellow: 'text-yellow-400 font-bold',
+    green:  'text-neon-green font-bold',
+    red:    'text-red-400 font-bold',
   }
   return (
-    <div className="flex justify-between items-center text-sm">
-      <span className="text-gray-400">{label}</span>
-      <span className={cls[color] ?? 'text-white'}>{value}</span>
+    <div className="space-y-0.5">
+      <div className="flex justify-between items-center text-sm">
+        <span className="text-gray-400">{label}</span>
+        <span className={cls[color] ?? 'text-white'}>{value}</span>
+      </div>
+      {hint && <p className="text-[10px] text-gray-600">{hint}</p>}
     </div>
   )
 }
 
-function CheckIcon() {
+function ChevronIcon({ open }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+      style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+      <polyline points="6 9 12 15 18 9" />
     </svg>
   )
 }
-
+function CheckIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+}
 function XIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  )
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 }
