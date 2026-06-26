@@ -3,313 +3,267 @@ import { saveRide, getRidesByDate } from '../lib/db'
 
 const MILES_MULTIPLIER = 1.40
 
-/*
- * Verdict scale — based on effective ratio (after session boost)
- *
- * POSITIVE  ≥ 1.00  ACEITAR / BOA CORRIDA / EXCELENTE / INCRÍVEL
- * NEGATIVE  < 1.00  RECUSE / RUIM / MUITO RUIM / PÉSSIMO
- */
-function getVerdict(ratio) {
-  if (ratio >= 1.70) return { label: 'INCRÍVEL',    sub: 'Oferta excepcional — não perca',   accept: true,  tier: 4 }
-  if (ratio >= 1.45) return { label: 'EXCELENTE',   sub: 'Vale muito a pena aceitar',         accept: true,  tier: 3 }
-  if (ratio >= 1.20) return { label: 'BOA CORRIDA', sub: 'Boa relação custo-benefício',       accept: true,  tier: 2 }
-  if (ratio >= 1.00) return { label: 'ACEITAR',     sub: 'Cobre o mínimo recomendado',        accept: true,  tier: 1 }
-  if (ratio >= 0.90) return { label: 'RECUSE',      sub: 'Próximo do limite, mas não chega',  accept: false, tier: 1 }
-  if (ratio >= 0.75) return { label: 'RUIM',        sub: 'Abaixo do mínimo necessário',       accept: false, tier: 2 }
-  if (ratio >= 0.55) return { label: 'MUITO RUIM',  sub: 'Vai sair no prejuízo',              accept: false, tier: 3 }
-  return                    { label: 'PÉSSIMO',     sub: 'Não cobre nem o combustível',       accept: false, tier: 4 }
+// Session surplus: sum of (offered - minWithMargin) for today's accepted rides
+async function loadSurplus() {
+  const today = new Date().toISOString().slice(0, 10)
+  const rides = await getRidesByDate(today)
+  return rides
+    .filter(r => r.decision === 'aceitou')
+    .reduce((acc, r) => acc + ((r.offered || 0) - (r.minWithMargin || 0)), 0)
 }
 
-const POSITIVE_COLORS = {
-  1: { bg: '#06C167', text: '#000', glow: 'rgba(6,193,103,0.3)'   },
-  2: { bg: '#06C167', text: '#000', glow: 'rgba(6,193,103,0.35)'  },
-  3: { bg: '#00E676', text: '#000', glow: 'rgba(0,230,118,0.4)'   },
-  4: { bg: '#00FF94', text: '#000', glow: 'rgba(0,255,148,0.45)'  },
+function calcMinimum(miles, items, surplus) {
+  const adjMiles      = miles * MILES_MULTIPLIER
+  const breakeven     = adjMiles * 1.31 + items * 0.6
+  const minWithMargin = breakeven * 1.15
+  const effectiveMin  = Math.max(minWithMargin * 0.60, minWithMargin - Math.max(0, surplus))
+  const boosted       = surplus > 0 && effectiveMin < minWithMargin
+  return { adjMiles, minWithMargin, effectiveMin, boosted }
 }
-const NEGATIVE_COLORS = {
-  1: { bg: '#FF6B35', text: '#fff', glow: 'rgba(255,107,53,0.35)' },
-  2: { bg: '#E8413E', text: '#fff', glow: 'rgba(232,65,62,0.35)'  },
-  3: { bg: '#C62828', text: '#fff', glow: 'rgba(198,40,40,0.4)'   },
-  4: { bg: '#7B0000', text: '#fff', glow: 'rgba(123,0,0,0.5)'     },
-}
-// Boosted rides get an amber card
-const BOOSTED_COLORS = { bg: '#B45309', text: '#fff', glow: 'rgba(180,83,9,0.4)' }
 
 export default function Calculator({ costs }) {
-  const [form, setForm]               = useState({ offered: '', miles: '', items: '', store: '' })
-  const [result, setResult]           = useState(null)
-  const [saved,  setSaved]            = useState(null)
-  const [sessionSurplus, setSession]  = useState(0)
+  const [miles,   setMiles]   = useState('')
+  const [items,   setItems]   = useState('')
+  const [store,   setStore]   = useState('')
+  const [surplus, setSurplus] = useState(0)
+  const [step,    setStep]    = useState('input')   // input | minimum | accepted | done
+  const [calc,    setCalc]    = useState(null)
+  const [received,setReceived]= useState('')
 
-  // Load today's accepted rides and compute the running surplus
-  const refreshSession = async () => {
-    const today = new Date().toISOString().slice(0, 10)
-    const rides = await getRidesByDate(today)
-    const surplus = rides
-      .filter(r => r.decision === 'aceitou')
-      .reduce((acc, r) => acc + ((r.offered || 0) - (r.minWithMargin || 0)), 0)
-    setSession(surplus)
+  const refresh = async () => setSurplus(await loadSurplus())
+  useEffect(() => { refresh() }, [])
+
+  const handleCalc = () => {
+    const m = parseFloat(miles) || 0
+    const i = parseFloat(items) || 0
+    if (!m && !i) return
+    setCalc(calcMinimum(m, i, surplus))
+    setStep('minimum')
   }
 
-  useEffect(() => { refreshSession() }, [])
-
-  const set = (k, v) => { setForm(p => ({ ...p, [k]: v })); setResult(null); setSaved(null) }
-
-  const calculate = () => {
-    const offered    = parseFloat(form.offered)    || 0
-    const miles      = parseFloat(form.miles)      || 0
-    const items      = parseFloat(form.items)      || 0
-    const adjMiles   = miles * MILES_MULTIPLIER
-    const totalMiles = adjMiles
-
-    const rideCost      = totalMiles * costs.totalCostPerMile
-    const breakeven     = totalMiles * 1.31 + items * 0.6
-    const minWithMargin = breakeven * 1.15
-    const rawRatio      = minWithMargin > 0 ? offered / minWithMargin : 0
-
-    // Session boost: surplus from good rides lowers effective minimum
-    // Floor: effective min can't drop below 60% of the real minimum
-    const surplus       = Math.max(0, sessionSurplus)
-    const effectiveMin  = Math.max(minWithMargin * 0.60, minWithMargin - surplus)
-    const effectiveRatio= effectiveMin > 0 ? offered / effectiveMin : rawRatio
-
-    // A ride is "boosted" if it fails the raw check but passes with session surplus
-    const boosted       = offered < minWithMargin && offered >= effectiveMin && surplus > 0
-
-    const verdict       = getVerdict(effectiveRatio)
-    const netAfterCost  = offered - rideCost
-    const deficit       = minWithMargin - offered  // how much surplus this ride costs
-
-    setResult({
-      offered, miles, adjMiles, items, totalMiles,
-      rideCost, minWithMargin, effectiveMin, rawRatio, effectiveRatio,
-      verdict, netAfterCost, boosted,
-      sessionSurplus: surplus,
-      surplusAfter: boosted ? surplus - deficit : surplus,
-    })
-    setSaved(null)
-  }
-
-  const handleDecision = async (decision) => {
-    if (!result) return
+  const handleAccepted = () => { setReceived(''); setStep('accepted') }
+  const handleRejected = async () => {
     const now = new Date()
     await saveRide({
       timestamp:     now.toISOString(),
       date:          now.toISOString().slice(0, 10),
-      offered:       result.offered,
-      miles:         result.miles,
-      items:         result.items,
-      store:         form.store.trim(),
-      profit:        result.netAfterCost,
-      minWithMargin: result.minWithMargin,
-      boosted:       result.boosted,
-      decision,
+      miles:         parseFloat(miles) || 0,
+      items:         parseFloat(items) || 0,
+      store:         store.trim(),
+      offered:       null,
+      profit:        null,
+      minWithMargin: calc.minWithMargin,
+      boosted:       false,
+      decision:      'rejeitou',
     })
-    await refreshSession()
-    setSaved(decision)
+    await refresh()
+    setStep('done')
+  }
+
+  const handleConfirmAccepted = async () => {
+    const offered = parseFloat(received) || 0
+    const now     = new Date()
+    const { adjMiles, minWithMargin, boosted } = calc
+    const rideCost    = adjMiles * costs.totalCostPerMile
+    const profit      = offered - rideCost
+    const isBoosted   = boosted && offered < minWithMargin
+
+    await saveRide({
+      timestamp:     now.toISOString(),
+      date:          now.toISOString().slice(0, 10),
+      miles:         parseFloat(miles) || 0,
+      items:         parseFloat(items) || 0,
+      store:         store.trim(),
+      offered,
+      profit,
+      minWithMargin,
+      boosted:       isBoosted,
+      decision:      'aceitou',
+    })
+    await refresh()
+    setStep('done')
   }
 
   const reset = () => {
-    setForm({ offered: '', miles: '', items: '', store: '' })
-    setResult(null)
-    setSaved(null)
+    setMiles(''); setItems(''); setStore('')
+    setReceived(''); setCalc(null); setStep('input')
   }
 
-  const milesNum = parseFloat(form.miles) || 0
+  const milesNum = parseFloat(miles) || 0
 
-  return (
+  /* ── STEP: input ── */
+  if (step === 'input') return (
     <div className="px-5 py-4 space-y-3 pb-6">
-
-      {/* Session surplus pill */}
-      {sessionSurplus !== 0 && (
-        <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 border ${
-          sessionSurplus > 0
-            ? 'bg-amber-900/20 border-amber-700/40'
-            : 'bg-red-900/20 border-red-800/40'
-        }`}>
-          <div className="flex items-center gap-2">
-            <span className="text-base">🔥</span>
-            <span className="text-[12px] text-amber-400 font-semibold">Saldo de sessão</span>
-          </div>
-          <span className={`font-black text-base ${sessionSurplus > 0 ? 'text-amber-400' : 'text-red-400'}`}>
-            {sessionSurplus > 0 ? '+' : ''}${sessionSurplus.toFixed(2)}
-          </span>
+      {surplus > 0 && (
+        <div className="flex items-center justify-between bg-amber-900/20 border border-amber-700/40 rounded-xl px-4 py-2.5">
+          <span className="text-[12px] text-amber-400 font-semibold flex items-center gap-1.5">🔥 Saldo de sessão</span>
+          <span className="text-amber-400 font-black">+${surplus.toFixed(2)}</span>
         </div>
       )}
 
-      {/* Inputs */}
       <div className="space-y-2">
-        <InputField label="Valor Oferecido" prefix="$" value={form.offered} onChange={v => set('offered', v)} placeholder="0.00" type="number" />
-
-        {/* Miles with multiplier preview */}
+        {/* Miles */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-[11px] text-uber-muted font-semibold uppercase tracking-wider">Milhas</label>
             <span className="text-[11px] text-uber-green font-bold flex items-center gap-1">
-              <RouteIcon />
-              ×{MILES_MULTIPLIER} retorno incluído
+              <RouteIcon /> ×{MILES_MULTIPLIER} incluído
             </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center bg-uber-card rounded-xl border border-uber-border focus-within:border-white/40 transition-all overflow-hidden">
               <input
                 type="number" inputMode="decimal"
-                value={form.miles}
-                onChange={e => set('miles', e.target.value)}
+                value={miles} onChange={e => setMiles(e.target.value)}
                 placeholder="0.0"
-                className="flex-1 bg-transparent px-4 py-3.5 text-white text-base outline-none placeholder-zinc-700 font-medium"
+                className="flex-1 bg-transparent px-4 py-4 text-white text-lg outline-none placeholder-zinc-700 font-medium"
+                autoFocus
               />
-              <span className="pr-4 text-uber-muted text-sm font-medium">mi</span>
+              <span className="pr-4 text-uber-muted text-sm">mi</span>
             </div>
             {milesNum > 0 && (
-              <div className="flex items-center gap-1 bg-uber-green/10 border border-uber-green/30 rounded-xl px-3 py-3.5 flex-shrink-0">
-                <span className="text-uber-green font-black text-base">{(milesNum * MILES_MULTIPLIER).toFixed(1)}</span>
-                <span className="text-uber-green/70 text-xs">mi reais</span>
+              <div className="bg-uber-green/10 border border-uber-green/30 rounded-xl px-3 py-4 text-center flex-shrink-0">
+                <p className="text-uber-green font-black text-base leading-none">{(milesNum * MILES_MULTIPLIER).toFixed(1)}</p>
+                <p className="text-uber-green/60 text-[10px] mt-0.5">mi reais</p>
               </div>
             )}
           </div>
-          {milesNum > 0 && (
-            <p className="text-[11px] text-zinc-600 mt-1.5 pl-1">
-              {milesNum.toFixed(1)} mi × {MILES_MULTIPLIER} = {(milesNum * MILES_MULTIPLIER).toFixed(1)} mi
-            </p>
-          )}
         </div>
 
-        <InputField label="Itens" value={form.items} onChange={v => set('items', v)} placeholder="0" type="number" />
-        <InputField label="Mercado (opcional)" value={form.store} onChange={v => set('store', v)} placeholder="Smith's, Target…" type="text" />
+        {/* Items */}
+        <div>
+          <label className="block text-[11px] text-uber-muted mb-1.5 font-semibold uppercase tracking-wider">Itens</label>
+          <input
+            type="number" inputMode="numeric"
+            value={items} onChange={e => setItems(e.target.value)}
+            placeholder="0"
+            className="w-full bg-uber-card rounded-xl border border-uber-border focus:border-white/40 transition-all px-4 py-4 text-white text-lg outline-none placeholder-zinc-700 font-medium"
+          />
+        </div>
+
+        {/* Store (optional) */}
+        <div>
+          <label className="block text-[11px] text-uber-muted mb-1.5 font-semibold uppercase tracking-wider">Mercado (opcional)</label>
+          <input
+            type="text"
+            value={store} onChange={e => setStore(e.target.value)}
+            placeholder="Smith's, Target…"
+            className="w-full bg-uber-card rounded-xl border border-uber-border focus:border-white/40 transition-all px-4 py-3.5 text-white text-base outline-none placeholder-zinc-700 font-medium"
+          />
+        </div>
       </div>
 
       <button
-        onClick={calculate}
-        className="w-full py-4 bg-white text-black font-bold rounded-xl text-[15px] tracking-wide active:scale-[0.98] transition-all"
+        onClick={handleCalc}
+        disabled={!miles && !items}
+        className="w-full py-4 bg-white text-black font-bold rounded-xl text-[16px] tracking-wide active:scale-[0.98] transition-all disabled:opacity-30"
       >
-        Calcular
+        Ver Mínimo
       </button>
+    </div>
+  )
 
-      {result && !saved && <VerdictCard result={result} onDecision={handleDecision} />}
+  /* ── STEP: minimum ── */
+  if (step === 'minimum') {
+    const { minWithMargin, effectiveMin, boosted, adjMiles } = calc
+    const display = boosted ? effectiveMin : minWithMargin
 
-      {saved && (
-        <div className="bg-uber-card rounded-2xl p-5 text-center space-y-3 animate-scale-in">
-          <p className="text-white font-bold text-base">
-            {saved === 'aceitou' ? 'Registrado como aceita ✓' : 'Registrado como rejeitada ✕'}
+    return (
+      <div className="px-5 py-4 space-y-3 pb-6 animate-fade-up">
+        {/* Summary chips */}
+        <div className="flex gap-2 text-[12px]">
+          <span className="bg-uber-card border border-uber-border rounded-lg px-3 py-1.5 text-uber-sub font-medium">{milesNum} mi → {adjMiles.toFixed(1)} mi reais</span>
+          <span className="bg-uber-card border border-uber-border rounded-lg px-3 py-1.5 text-uber-sub font-medium">{items || 0} itens</span>
+          {store && <span className="bg-uber-card border border-uber-border rounded-lg px-3 py-1.5 text-uber-sub font-medium truncate">{store}</span>}
+        </div>
+
+        {/* Minimum card */}
+        <div className="bg-uber-surface border border-uber-border rounded-2xl p-6 text-center space-y-1">
+          <p className="text-[11px] text-uber-muted font-bold uppercase tracking-[0.2em]">
+            {boosted ? 'Mínimo com saldo de sessão' : 'Mínimo para aceitar'}
           </p>
-          <button onClick={reset} className="px-6 py-2.5 bg-uber-border text-white rounded-xl text-sm font-semibold hover:bg-zinc-700 transition-colors">
-            Nova corrida
+          <p className="text-[64px] font-black text-white leading-none tracking-tight">
+            ${display.toFixed(2)}
+          </p>
+          {boosted && (
+            <div className="pt-1 space-y-0.5">
+              <p className="text-uber-muted text-xs line-through">${minWithMargin.toFixed(2)} sem saldo</p>
+              <p className="text-amber-400 text-xs font-bold flex items-center justify-center gap-1">🔥 Impulsionado pelo saldo de +${surplus.toFixed(2)}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Decision buttons */}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <button
+            onClick={handleAccepted}
+            className="py-5 bg-uber-green text-black font-black rounded-xl text-base active:scale-95 transition-all"
+          >
+            Aceitei
+          </button>
+          <button
+            onClick={handleRejected}
+            className="py-5 bg-uber-card border border-uber-border text-uber-sub font-bold rounded-xl text-base active:scale-95 transition-all hover:border-white/20"
+          >
+            Rejeitei
           </button>
         </div>
-      )}
-    </div>
-  )
-}
 
-function VerdictCard({ result, onDecision }) {
-  const { verdict, effectiveRatio, boosted, sessionSurplus, surplusAfter, minWithMargin, offered } = result
-  const colors = boosted
-    ? BOOSTED_COLORS
-    : verdict.accept
-    ? POSITIVE_COLORS[verdict.tier]
-    : NEGATIVE_COLORS[verdict.tier]
+        <button onClick={reset} className="w-full text-center text-uber-muted text-sm py-2">
+          ← Voltar
+        </button>
+      </div>
+    )
+  }
 
-  const deficit = minWithMargin - offered
+  /* ── STEP: accepted — enter actual amount ── */
+  if (step === 'accepted') return (
+    <div className="px-5 py-4 space-y-4 pb-6 animate-fade-up">
+      <div className="bg-uber-surface border border-uber-border rounded-2xl p-5 text-center">
+        <p className="text-[11px] text-uber-muted font-bold uppercase tracking-[0.2em] mb-1">Mínimo era</p>
+        <p className="text-3xl font-black text-uber-green">${(calc.boosted ? calc.effectiveMin : calc.minWithMargin).toFixed(2)}</p>
+      </div>
 
-  return (
-    <div className="space-y-3 animate-scale-in">
-      <div
-        className="rounded-2xl px-6 pt-6 pb-5 text-center flex flex-col items-center gap-2"
-        style={{ backgroundColor: colors.bg, boxShadow: `0 0 40px ${colors.glow}` }}
-      >
-        {/* Boosted badge */}
-        {boosted && (
-          <div className="flex items-center gap-1.5 bg-black/20 rounded-full px-3 py-1 mb-1">
-            <span className="text-sm">🔥</span>
-            <span className="text-[12px] font-black text-white tracking-wide uppercase">Impulsionado</span>
-          </div>
-        )}
-
-        <p className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-70" style={{ color: colors.text }}>
-          {verdict.accept ? 'ACEITAR CORRIDA' : 'REJEITAR CORRIDA'}
-        </p>
-        <p className="text-5xl font-black tracking-tight leading-none" style={{ color: colors.text }}>
-          {verdict.label}
-        </p>
-        <p className="text-sm font-medium mt-0.5 opacity-75" style={{ color: colors.text }}>
-          {boosted ? `Saldo cobre o déficit de $${deficit.toFixed(2)}` : verdict.sub}
-        </p>
-
-        {/* Boosted surplus flow */}
-        {boosted && (
-          <div className="w-full mt-3 bg-black/20 rounded-xl px-4 py-3 space-y-1 text-left">
-            <div className="flex justify-between text-xs font-semibold opacity-80" style={{ color: colors.text }}>
-              <span>Saldo antes</span>
-              <span>+${sessionSurplus.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-xs font-semibold opacity-80" style={{ color: colors.text }}>
-              <span>Déficit desta corrida</span>
-              <span>−${deficit.toFixed(2)}</span>
-            </div>
-            <div className="border-t border-white/20 pt-1 flex justify-between text-xs font-black" style={{ color: colors.text }}>
-              <span>Saldo após aceitar</span>
-              <span>{surplusAfter >= 0 ? '+' : ''}${surplusAfter.toFixed(2)}</span>
-            </div>
-          </div>
-        )}
-
-        <div className="w-full mt-3">
-          <RatioBar ratio={effectiveRatio} barColor={colors.text} boosted={boosted} />
+      <div>
+        <label className="block text-[11px] text-uber-muted mb-1.5 font-semibold uppercase tracking-wider">Quanto te pagaram?</label>
+        <div className="flex items-center bg-uber-card rounded-xl border border-uber-border focus-within:border-white/40 transition-all overflow-hidden">
+          <span className="pl-4 text-uber-sub text-xl font-semibold">$</span>
+          <input
+            type="number" inputMode="decimal"
+            value={received} onChange={e => setReceived(e.target.value)}
+            placeholder="0.00"
+            className="flex-1 bg-transparent px-3 py-4 text-white text-2xl outline-none placeholder-zinc-700 font-bold"
+            autoFocus
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => onDecision('aceitou')}
-          className="py-4 bg-uber-card border border-uber-border text-white font-bold rounded-xl text-sm active:scale-95 transition-all hover:border-white/30"
-        >
-          Aceitei
-        </button>
-        <button
-          onClick={() => onDecision('rejeitou')}
-          className="py-4 bg-uber-card border border-uber-border text-uber-sub font-bold rounded-xl text-sm active:scale-95 transition-all hover:border-white/20"
-        >
-          Rejeitei
-        </button>
-      </div>
+      <button
+        onClick={handleConfirmAccepted}
+        disabled={!received}
+        className="w-full py-4 bg-white text-black font-bold rounded-xl text-[16px] tracking-wide active:scale-[0.98] transition-all disabled:opacity-30"
+      >
+        Confirmar
+      </button>
+
+      <button onClick={() => setStep('minimum')} className="w-full text-center text-uber-muted text-sm py-1">
+        ← Voltar
+      </button>
     </div>
   )
-}
 
-function RatioBar({ ratio, barColor, boosted }) {
-  const pct = Math.min(100, (ratio / 2) * 100)
+  /* ── STEP: done ── */
   return (
-    <div className="space-y-1.5">
-      <div className="relative w-full h-1.5 rounded-full" style={{ backgroundColor: 'rgba(0,0,0,0.25)' }}>
-        <div className="absolute top-1/2 -translate-y-1/2 w-0.5 h-3 rounded-full" style={{ left: '50%', backgroundColor: 'rgba(0,0,0,0.4)' }} />
-        <div className="absolute left-0 top-0 h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: 'rgba(0,0,0,0.4)' }} />
-        <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 transition-all duration-700"
-          style={{ left: `calc(${Math.min(96, pct)}% - 6px)`, backgroundColor: boosted ? '#FCD34D' : barColor, borderColor: 'rgba(0,0,0,0.3)' }}
-        />
-      </div>
-      <div className="flex justify-between text-[10px] font-semibold opacity-60" style={{ color: barColor }}>
-        <span>Mínimo</span>
-        <span>{Math.round(ratio * 100)}%{boosted ? ' (com saldo)' : ''}</span>
-        <span>200%</span>
-      </div>
-    </div>
-  )
-}
-
-function InputField({ label, value, onChange, placeholder, type, prefix, suffix }) {
-  return (
-    <div>
-      <label className="block text-[11px] text-uber-muted mb-1.5 font-semibold uppercase tracking-wider">{label}</label>
-      <div className="flex items-center bg-uber-card rounded-xl border border-uber-border focus-within:border-white/40 transition-all overflow-hidden">
-        {prefix && <span className="pl-4 text-uber-sub text-base">{prefix}</span>}
-        <input
-          type={type} inputMode={type === 'number' ? 'decimal' : 'text'}
-          value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-          className="flex-1 bg-transparent px-4 py-3.5 text-white text-base outline-none placeholder-zinc-700 font-medium"
-        />
-        {suffix && <span className="pr-4 text-uber-muted text-sm font-medium">{suffix}</span>}
+    <div className="px-5 py-4 animate-fade-up">
+      <div className="bg-uber-surface border border-uber-border rounded-2xl p-8 text-center space-y-4">
+        <p className="text-4xl">✓</p>
+        <p className="text-white font-bold text-lg">Corrida registrada</p>
+        <button
+          onClick={reset}
+          className="w-full py-4 bg-white text-black font-bold rounded-xl text-[15px] active:scale-[0.98] transition-all"
+        >
+          Nova corrida
+        </button>
       </div>
     </div>
   )
