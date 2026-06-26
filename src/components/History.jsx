@@ -117,7 +117,7 @@ function RideCard({ ride }) {
             <span className="text-[11px] text-uber-muted">{time}</span>
           </div>
           {ride.store && <p className="text-white font-semibold text-sm mb-1">{ride.store}</p>}
-          <p className="text-uber-muted text-xs">{ride.miles} mi · {ride.items} itens{ride.extraMiles>0?` · +${ride.extraMiles} mi`:''}</p>
+          <p className="text-uber-muted text-xs">{ride.miles} mi · {ride.items} itens</p>
         </div>
         <div className="text-right ml-4 flex-shrink-0">
           <p className="text-xl font-bold text-white">${ride.offered?.toFixed(2)}</p>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { saveRide, getRidesByDate } from '../lib/db'
 
-const MILES_MULTIPLIER = 1.35
+const MILES_MULTIPLIER = 1.40
 
 /*
  * Verdict scale — based on effective ratio (after session boost)
@@ -36,7 +36,7 @@ const NEGATIVE_COLORS = {
 const BOOSTED_COLORS = { bg: '#B45309', text: '#fff', glow: 'rgba(180,83,9,0.4)' }
 
 export default function Calculator({ costs }) {
-  const [form, setForm]               = useState({ offered: '', miles: '', items: '', extraMiles: '', store: '' })
+  const [form, setForm]               = useState({ offered: '', miles: '', items: '', store: '' })
   const [result, setResult]           = useState(null)
   const [saved,  setSaved]            = useState(null)
   const [sessionSurplus, setSession]  = useState(0)
@@ -59,9 +59,8 @@ export default function Calculator({ costs }) {
     const offered    = parseFloat(form.offered)    || 0
     const miles      = parseFloat(form.miles)      || 0
     const items      = parseFloat(form.items)      || 0
-    const extra      = parseFloat(form.extraMiles) || 0
     const adjMiles   = miles * MILES_MULTIPLIER
-    const totalMiles = adjMiles + extra
+    const totalMiles = adjMiles
 
     const rideCost      = totalMiles * costs.totalCostPerMile
     const breakeven     = totalMiles * 1.31 + items * 0.6
@@ -82,7 +81,7 @@ export default function Calculator({ costs }) {
     const deficit       = minWithMargin - offered  // how much surplus this ride costs
 
     setResult({
-      offered, miles, adjMiles, items, extra, totalMiles,
+      offered, miles, adjMiles, items, totalMiles,
       rideCost, minWithMargin, effectiveMin, rawRatio, effectiveRatio,
       verdict, netAfterCost, boosted,
       sessionSurplus: surplus,
@@ -100,7 +99,6 @@ export default function Calculator({ costs }) {
       offered:       result.offered,
       miles:         result.miles,
       items:         result.items,
-      extraMiles:    result.extra,
       store:         form.store.trim(),
       profit:        result.netAfterCost,
       minWithMargin: result.minWithMargin,
@@ -112,7 +110,7 @@ export default function Calculator({ costs }) {
   }
 
   const reset = () => {
-    setForm({ offered: '', miles: '', items: '', extraMiles: '', store: '' })
+    setForm({ offered: '', miles: '', items: '', store: '' })
     setResult(null)
     setSaved(null)
   }
@@ -178,7 +176,6 @@ export default function Calculator({ costs }) {
         </div>
 
         <InputField label="Itens" value={form.items} onChange={v => set('items', v)} placeholder="0" type="number" />
-        <InputField label="Deslocamento extra até a loja (opcional)" suffix="mi" value={form.extraMiles} onChange={v => set('extraMiles', v)} placeholder="0.0" type="number" />
         <InputField label="Mercado (opcional)" value={form.store} onChange={v => set('store', v)} placeholder="Smith's, Target…" type="text" />
       </div>
 
