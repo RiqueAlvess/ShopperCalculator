@@ -4,20 +4,19 @@ export default {
   theme: {
     extend: {
       colors: {
-        graphite: {
-          900: '#0f1117',
-          800: '#161b22',
-          700: '#1c2230',
-          600: '#222d3d',
-          500: '#2d3748',
-        },
-        neon: {
-          green: '#39ff14',
-          dim: '#22c55e',
+        uber: {
+          black:   '#000000',
+          surface: '#111111',
+          card:    '#1a1a1a',
+          border:  '#2a2a2a',
+          muted:   '#6b6b6b',
+          sub:     '#999999',
+          green:   '#06C167',
+          red:     '#E8413E',
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       }
     }
   },
