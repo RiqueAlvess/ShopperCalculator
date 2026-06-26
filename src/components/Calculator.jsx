@@ -52,8 +52,10 @@ export default function Calculator({ costs }) {
     const offered    = parseFloat(form.offered)    || 0
     const miles      = parseFloat(form.miles)      || 0
     const items      = parseFloat(form.items)      || 0
-    const extra      = parseFloat(form.extraMiles) || 0
-    const totalMiles = miles + extra
+    const extra        = parseFloat(form.extraMiles) || 0
+    // Miles are doubled to account for the return trip the app doesn't show
+    const milesRounded = miles * 2
+    const totalMiles   = milesRounded + extra
 
     const rideCost      = totalMiles * costs.totalCostPerMile
     const breakeven     = totalMiles * 1.31 + items * 0.6
@@ -62,7 +64,7 @@ export default function Calculator({ costs }) {
     const verdict       = getVerdict(ratio)
     const netAfterCost  = offered - rideCost
 
-    setResult({ offered, miles, items, extra, totalMiles, rideCost, minWithMargin, ratio, verdict, netAfterCost })
+    setResult({ offered, miles, milesRounded, items, extra, totalMiles, rideCost, minWithMargin, ratio, verdict, netAfterCost })
     setSaved(null)
   }
 
@@ -93,13 +95,46 @@ export default function Calculator({ costs }) {
     <div className="px-5 py-4 space-y-3 pb-6">
       {/* Inputs */}
       <div className="space-y-2">
-        <InputField label="Valor Oferecido" prefix="$"  value={form.offered}    onChange={(v) => set('offered', v)}    placeholder="0.00"               type="number" />
-        <div className="grid grid-cols-2 gap-2">
-          <InputField label="Milhas"        suffix="mi" value={form.miles}      onChange={(v) => set('miles', v)}      placeholder="0.0"                type="number" />
-          <InputField label="Itens"                     value={form.items}      onChange={(v) => set('items', v)}      placeholder="0"                  type="number" />
+        <InputField label="Valor Oferecido" prefix="$" value={form.offered} onChange={(v) => set('offered', v)} placeholder="0.00" type="number" />
+
+        {/* Miles field with round-trip indicator */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-[11px] text-uber-muted font-semibold uppercase tracking-wider">Milhas</label>
+            <span className="text-[11px] text-uber-green font-bold flex items-center gap-1">
+              <RouteIcon />
+              Ida + volta calculadas automaticamente
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center bg-uber-card rounded-xl border border-uber-border focus-within:border-white/40 transition-all overflow-hidden">
+              <input
+                type="number"
+                inputMode="decimal"
+                value={form.miles}
+                onChange={(e) => set('miles', e.target.value)}
+                placeholder="0.0"
+                className="flex-1 bg-transparent px-4 py-3.5 text-white text-base outline-none placeholder-zinc-700 font-medium"
+              />
+              <span className="pr-4 text-uber-muted text-sm font-medium">mi</span>
+            </div>
+            {form.miles > 0 && (
+              <div className="flex items-center gap-1 bg-uber-green/10 border border-uber-green/30 rounded-xl px-3 py-3.5 flex-shrink-0">
+                <span className="text-uber-green font-black text-base">{(parseFloat(form.miles)*2).toFixed(1)}</span>
+                <span className="text-uber-green/70 text-xs font-medium">mi reais</span>
+              </div>
+            )}
+          </div>
+          {form.miles > 0 && (
+            <p className="text-[11px] text-zinc-600 mt-1.5 pl-1">
+              {parseFloat(form.miles).toFixed(1)} mi × 2 = {(parseFloat(form.miles)*2).toFixed(1)} mi (ida e volta)
+            </p>
+          )}
         </div>
-        <InputField label="Deslocamento extra (opcional)" suffix="mi" value={form.extraMiles} onChange={(v) => set('extraMiles', v)} placeholder="0.0" type="number" />
-        <InputField label="Mercado (opcional)"            value={form.store}    onChange={(v) => set('store', v)}      placeholder="Smith's, Target…"   type="text"   />
+
+        <InputField label="Itens" value={form.items} onChange={(v) => set('items', v)} placeholder="0" type="number" />
+        <InputField label="Deslocamento extra até a loja (opcional)" suffix="mi" value={form.extraMiles} onChange={(v) => set('extraMiles', v)} placeholder="0.0" type="number" />
+        <InputField label="Mercado (opcional)" value={form.store} onChange={(v) => set('store', v)} placeholder="Smith's, Target…" type="text" />
       </div>
 
       <button
@@ -232,5 +267,14 @@ function InputField({ label, value, onChange, placeholder, type, prefix, suffix 
         {suffix && <span className="pr-4 text-uber-muted text-sm font-medium">{suffix}</span>}
       </div>
     </div>
+  )
+}
+
+function RouteIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/>
+      <path d="M6 17V8a6 6 0 0 1 12 0v8"/>
+    </svg>
   )
 }
