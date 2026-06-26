@@ -89,17 +89,17 @@ export default function Settings({ settings, updateSetting, costs }) {
         <BufferExplain
           label="Gasolina"
           pct={GAS_BUFFER}
-          why="Preços de varejo oscilam ±8–18% sazonalmente (fonte: EIA). Um spike de refinery pode subir 10% numa semana."
+          why="Margem de 6% para absorver oscilações de curto prazo no preço da gasolina."
         />
         <BufferExplain
           label="Manutenção"
           pct={MAINTENANCE_BUFFER}
-          why="Peças automotivas subiram +7,9% ao ano de 2022–2024 (fonte: BLS CPI). Mão-de-obra independente +5–7% a.a."
+          why="Margem de 6% para cobrir aumento de peças e mão-de-obra ao longo do tempo."
         />
         <div className="border-t border-graphite-600 pt-3 space-y-2">
           <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest">Fórmula</p>
-          <FormulaRow label="Custo Combustível/mi" value="(Gas × 1.12) ÷ MPG" />
-          <FormulaRow label="Custo Manutenção/mi"  value="(Manutenção × 1.08) ÷ freq ÷ 1.050 mi/mês" />
+          <FormulaRow label="Custo Combustível/mi" value="(Gas × 1.06) ÷ MPG" />
+          <FormulaRow label="Custo Manutenção/mi"  value="(Manutenção × 1.06) ÷ freq ÷ 1.050 mi/mês" />
           <FormulaRow label="Breakeven"             value="(mi × 1.31) + (itens × $0.60)" />
           <FormulaRow label="Mínimo Recomendado"    value="Breakeven × 1.15  (margem 15%)" />
         </div>

@@ -1,22 +1,18 @@
 /*
  * Cost buffer rationale (US gig-driver market, 2024-2025 data):
  *
- * GAS_BUFFER  = 12%
- *   - EIA data: US retail gasoline prices swing ±8–18% seasonally
- *   - Weekly spot price can jump 5–10% after refinery disruptions
- *   - 12% covers ~1 standard deviation of month-over-month movement
+ * GAS_BUFFER  = 6%  (user-defined)
+ *   - Applied uniformly to cover short-term price fluctuation
  *
- * MAINTENANCE_BUFFER = 8%
- *   - BLS CPI: auto parts & supplies +7.9% YoY (2022–2024 avg)
- *   - Labor rates at independent shops up 5–7% annually
- *   - 8% blends parts inflation with labor; conservative vs 10% parts peak
+ * MAINTENANCE_BUFFER = 6%  (user-defined)
+ *   - Applied uniformly to cover parts/labor cost increases
  *
  * These are applied to the *inputs* before cost-per-mile is derived,
  * so every calculation already prices in near-future increases.
  */
 
-export const GAS_BUFFER         = 0.12   // +12% on gas price
-export const MAINTENANCE_BUFFER = 0.08   // +8%  on maintenance cost
+export const GAS_BUFFER         = 0.06   // +6% on gas price
+export const MAINTENANCE_BUFFER = 0.06   // +6% on maintenance cost
 
 export function adjustedCosts(gasPrice, mpg, maintenanceCost, maintenanceFreqMonths) {
   const adjGas         = gasPrice * (1 + GAS_BUFFER)
