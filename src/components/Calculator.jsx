@@ -12,7 +12,7 @@ async function loadSurplus() {
     .reduce((acc, r) => acc + ((r.offered || 0) - (r.minWithMargin || 0)), 0)
 }
 
-const AVG_SPEED_MPH = 20
+const AVG_SPEED_MPH = 45
 
 function calcMinimum(miles, items, surplus, costPerMile, avgSecondsPerItem) {
   const adjMiles        = miles * MILES_MULTIPLIER
