@@ -13,7 +13,7 @@ async function loadSurplus() {
 
 function calcMinimum(miles, items, surplus, costPerMile) {
   const adjMiles      = miles * MILES_MULTIPLIER
-  const breakeven     = adjMiles * costPerMile + items * 0.30
+  const breakeven     = adjMiles * costPerMile + items * 0.33
   const minWithMargin = breakeven * 1.15
   const effectiveMin  = Math.max(minWithMargin * 0.60, minWithMargin - Math.max(0, surplus))
   const boosted       = surplus > 0 && effectiveMin < minWithMargin
