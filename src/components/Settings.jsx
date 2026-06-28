@@ -62,7 +62,7 @@ export default function Settings({ settings, updateSetting, costs }) {
           <InfoRow label="Margem manutenção" value={`+${Math.round(MAINTENANCE_BUFFER*100)}%`} />
           <div className="border-t border-uber-border pt-3 space-y-2 text-[12px] text-uber-muted font-mono">
             <p>Milhas ajustadas = mi × 1.20</p>
-            <p>Breakeven = (mi_adj × 1.31) + (itens × 0.30)</p>
+            <p>Breakeven = (mi_adj × custo/mi) + (itens × 0.30)</p>
             <p>Mínimo = Breakeven × 1.15</p>
           </div>
           <p className="text-[11px] text-zinc-700 pt-1">Dados salvos localmente — funciona offline.</p>
