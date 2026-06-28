@@ -10,6 +10,7 @@ const DEFAULTS = {
   dailyGoal: 150,
   weeklyGoal: 900,
   monthlyGoal: 3600,
+  avgSecondsPerItem: 90,
 }
 
 export function useSettings() {
@@ -29,12 +30,15 @@ export function useSettings() {
     setSettings((prev) => ({ ...prev, [key]: parsed }))
   }, [])
 
-  const costs = adjustedCosts(
-    settings.gasPrice,
-    settings.mpg,
-    settings.maintenanceCost,
-    settings.maintenanceFreqMonths,
-  )
+  const costs = {
+    ...adjustedCosts(
+      settings.gasPrice,
+      settings.mpg,
+      settings.maintenanceCost,
+      settings.maintenanceFreqMonths,
+    ),
+    avgSecondsPerItem: settings.avgSecondsPerItem,
+  }
 
   return { settings, updateSetting, costs, loaded }
 }

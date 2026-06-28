@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { saveRide, getRidesByDate } from '../lib/db'
 
 const MILES_MULTIPLIER = 1.50
+const ITEM_HOURLY_RATE = 15   // $15/hr — realistic Instacart net rate
 
 async function loadSurplus() {
   const today = new Date().toISOString().slice(0, 10)
@@ -11,9 +12,10 @@ async function loadSurplus() {
     .reduce((acc, r) => acc + ((r.offered || 0) - (r.minWithMargin || 0)), 0)
 }
 
-function calcMinimum(miles, items, surplus, costPerMile) {
+function calcMinimum(miles, items, surplus, costPerMile, avgSecondsPerItem) {
   const adjMiles      = miles * MILES_MULTIPLIER
-  const breakeven     = adjMiles * costPerMile + items * 0.33
+  const costPerItem   = (avgSecondsPerItem / 3600) * ITEM_HOURLY_RATE
+  const breakeven     = adjMiles * costPerMile + items * costPerItem
   const minWithMargin = breakeven * 1.15
   const effectiveMin  = Math.max(minWithMargin * 0.60, minWithMargin - Math.max(0, surplus))
   const boosted       = surplus > 0 && effectiveMin < minWithMargin
@@ -34,7 +36,7 @@ export default function Calculator({ costs }) {
   const handleCalc = () => {
     const m = parseFloat(miles) || 0
     const i = parseFloat(items) || 0
-    setCalc(calcMinimum(m, i, surplus, costs.totalCostPerMile))
+    setCalc(calcMinimum(m, i, surplus, costs.totalCostPerMile, costs.avgSecondsPerItem))
     setStep('minimum')
   }
 

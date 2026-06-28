@@ -8,7 +8,7 @@ export default function Settings({ settings, updateSetting, costs }) {
   useEffect(() => { setLocal({ ...settings }) }, [settings])
 
   const handleSave = async () => {
-    const keys = ['gasPrice','mpg','maintenanceCost','maintenanceFreqMonths','dailyGoal','weeklyGoal','monthlyGoal']
+    const keys = ['gasPrice','mpg','maintenanceCost','maintenanceFreqMonths','dailyGoal','weeklyGoal','monthlyGoal','avgSecondsPerItem']
     await Promise.all(keys.map((k) => updateSetting(k, local[k])))
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
@@ -41,6 +41,17 @@ export default function Settings({ settings, updateSetting, costs }) {
         </div>
       </Section>
 
+      <Section label="Tempo por Item">
+        <Field label="Segundos por item (média)" suffix="seg" value={local.avgSecondsPerItem} onChange={(v) => set('avgSecondsPerItem', v)} />
+        <div className="pt-1">
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-uber-muted">Custo / item</span>
+            <span className="text-uber-green font-bold">${((parseFloat(local.avgSecondsPerItem)||90) / 3600 * 15).toFixed(3)}</span>
+          </div>
+          <p className="text-[11px] text-zinc-600 mt-1.5">Taxa base: $15/hr (média real Instacart)</p>
+        </div>
+      </Section>
+
       <Section label="Metas Financeiras">
         <Field label="Meta diária"  prefix="$" value={local.dailyGoal}   onChange={(v) => set('dailyGoal', v)} />
         <Field label="Meta semanal" prefix="$" value={local.weeklyGoal}  onChange={(v) => set('weeklyGoal', v)} />
@@ -62,7 +73,8 @@ export default function Settings({ settings, updateSetting, costs }) {
           <InfoRow label="Margem manutenção" value={`+${Math.round(MAINTENANCE_BUFFER*100)}%`} />
           <div className="border-t border-uber-border pt-3 space-y-2 text-[12px] text-uber-muted font-mono">
             <p>Milhas ajustadas = mi × 1.50</p>
-            <p>Breakeven = (mi_adj × custo/mi) + (itens × 0.33)</p>
+            <p>Custo/item = (seg/3600) × $15/hr</p>
+            <p>Breakeven = (mi_adj × custo/mi) + (itens × custo/item)</p>
             <p>Mínimo = Breakeven × 1.15</p>
           </div>
           <p className="text-[11px] text-zinc-700 pt-1">Dados salvos localmente — funciona offline.</p>
