@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { saveRide, getRidesByDate } from '../lib/db'
 
-const MILES_MULTIPLIER = 1.40
+const MILES_MULTIPLIER = 1.20
 
 async function loadSurplus() {
   const today = new Date().toISOString().slice(0, 10)
@@ -11,9 +11,9 @@ async function loadSurplus() {
     .reduce((acc, r) => acc + ((r.offered || 0) - (r.minWithMargin || 0)), 0)
 }
 
-function calcMinimum(miles, items, surplus) {
+function calcMinimum(miles, items, surplus, itemCostPerUnit) {
   const adjMiles      = miles * MILES_MULTIPLIER
-  const breakeven     = adjMiles * 1.31 + items * 0.6
+  const breakeven     = adjMiles * 1.31 + items * itemCostPerUnit
   const minWithMargin = breakeven * 1.15
   const effectiveMin  = Math.max(minWithMargin * 0.60, minWithMargin - Math.max(0, surplus))
   const boosted       = surplus > 0 && effectiveMin < minWithMargin
@@ -34,7 +34,7 @@ export default function Calculator({ costs }) {
   const handleCalc = () => {
     const m = parseFloat(miles) || 0
     const i = parseFloat(items) || 0
-    setCalc(calcMinimum(m, i, surplus))
+    setCalc(calcMinimum(m, i, surplus, costs.itemCostPerUnit))
     setStep('minimum')
   }
 

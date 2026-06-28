@@ -13,6 +13,7 @@
 
 export const GAS_BUFFER         = 0.06   // +6% on gas price
 export const MAINTENANCE_BUFFER = 0.06   // +6% on maintenance cost
+export const ITEM_TIME_BUFFER   = 0.15   // +15% on seconds per item (pessimistic scenario)
 
 export function adjustedCosts(gasPrice, mpg, maintenanceCost, maintenanceFreqMonths) {
   const adjGas         = gasPrice * (1 + GAS_BUFFER)
@@ -36,8 +37,14 @@ export function adjustedCosts(gasPrice, mpg, maintenanceCost, maintenanceFreqMon
     fuelPerMile,
     maintPerMile,
     totalCostPerMile,
-    // raw (no buffer) for display comparison
     rawGas: gasPrice,
     rawCostPerMile: gasPrice / mpg,
   }
+}
+
+export function calcItemCost(avgSecondsPerItem, hourlyRate) {
+  const adjSeconds = avgSecondsPerItem * (1 + ITEM_TIME_BUFFER)
+  const costPerSecond = hourlyRate / 3600
+  const timeCostPerItem = adjSeconds * costPerSecond
+  return timeCostPerItem + 0.30
 }

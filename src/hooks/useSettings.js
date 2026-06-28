@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getAllSettings, saveSetting } from '../lib/db'
-import { adjustedCosts } from '../lib/costBuffers'
+import { adjustedCosts, calcItemCost } from '../lib/costBuffers'
 
 const DEFAULTS = {
   gasPrice: 3.50,
@@ -10,6 +10,8 @@ const DEFAULTS = {
   dailyGoal: 150,
   weeklyGoal: 900,
   monthlyGoal: 3600,
+  avgSecondsPerItem: 120,
+  hourlyRate: 20,
 }
 
 export function useSettings() {
@@ -29,12 +31,18 @@ export function useSettings() {
     setSettings((prev) => ({ ...prev, [key]: parsed }))
   }, [])
 
-  const costs = adjustedCosts(
-    settings.gasPrice,
-    settings.mpg,
-    settings.maintenanceCost,
-    settings.maintenanceFreqMonths,
-  )
+  const costs = {
+    ...adjustedCosts(
+      settings.gasPrice,
+      settings.mpg,
+      settings.maintenanceCost,
+      settings.maintenanceFreqMonths,
+    ),
+    itemCostPerUnit: calcItemCost(
+      settings.avgSecondsPerItem,
+      settings.hourlyRate,
+    ),
+  }
 
   return { settings, updateSetting, costs, loaded }
 }
