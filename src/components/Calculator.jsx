@@ -12,14 +12,19 @@ async function loadSurplus() {
     .reduce((acc, r) => acc + ((r.offered || 0) - (r.minWithMargin || 0)), 0)
 }
 
+const AVG_SPEED_MPH = 20
+
 function calcMinimum(miles, items, surplus, costPerMile, avgSecondsPerItem) {
-  const adjMiles      = miles * MILES_MULTIPLIER
-  const costPerItem   = (avgSecondsPerItem / 3600) * ITEM_HOURLY_RATE
-  const breakeven     = adjMiles * costPerMile + items * costPerItem
-  const minWithMargin = breakeven * 1.15
-  const effectiveMin  = Math.max(minWithMargin * 0.60, minWithMargin - Math.max(0, surplus))
-  const boosted       = surplus > 0 && effectiveMin < minWithMargin
-  return { adjMiles, minWithMargin, effectiveMin, boosted }
+  const adjMiles        = miles * MILES_MULTIPLIER
+  const costPerItem     = (avgSecondsPerItem / 3600) * ITEM_HOURLY_RATE
+  const breakeven       = adjMiles * costPerMile + items * costPerItem
+  const minWithMargin   = breakeven * 1.15
+  const effectiveMin    = Math.max(minWithMargin * 0.60, minWithMargin - Math.max(0, surplus))
+  const boosted         = surplus > 0 && effectiveMin < minWithMargin
+  const driveMins       = (miles / AVG_SPEED_MPH) * 60
+  const shopMins        = (items * avgSecondsPerItem) / 60
+  const estimatedMins   = Math.round(driveMins + shopMins)
+  return { adjMiles, minWithMargin, effectiveMin, boosted, estimatedMins, driveMins: Math.round(driveMins), shopMins: Math.round(shopMins) }
 }
 
 export default function Calculator({ costs }) {
@@ -110,7 +115,7 @@ export default function Calculator({ costs }) {
 
   /* ── MINIMUM ── */
   if (step === 'minimum') {
-    const { minWithMargin, effectiveMin, boosted } = calc
+    const { minWithMargin, effectiveMin, boosted, estimatedMins, driveMins, shopMins } = calc
     const display = boosted ? effectiveMin : minWithMargin
 
     return (
@@ -125,6 +130,17 @@ export default function Calculator({ costs }) {
               🔥 Impulsionado pelo saldo de +${surplus.toFixed(2)}
             </p>
           )}
+          <div className="flex items-center justify-center gap-4 pt-3 border-t border-uber-border mt-3">
+            <div className="text-center">
+              <p className="text-[22px] font-black text-white">~{estimatedMins} min</p>
+              <p className="text-[10px] text-uber-muted font-semibold uppercase tracking-wider">tempo estimado</p>
+            </div>
+            <div className="w-px h-8 bg-uber-border"/>
+            <div className="text-center">
+              <p className="text-[13px] font-semibold text-uber-sub">{driveMins} min dirigindo</p>
+              <p className="text-[13px] font-semibold text-uber-sub">{shopMins} min na loja</p>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
