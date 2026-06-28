@@ -61,7 +61,7 @@ export default function Settings({ settings, updateSetting, costs }) {
           <InfoRow label="Margem gasolina"   value={`+${Math.round(GAS_BUFFER*100)}%`} />
           <InfoRow label="Margem manutenção" value={`+${Math.round(MAINTENANCE_BUFFER*100)}%`} />
           <div className="border-t border-uber-border pt-3 space-y-2 text-[12px] text-uber-muted font-mono">
-            <p>Milhas ajustadas = mi × 1.35</p>
+            <p>Milhas ajustadas = mi × 1.50</p>
             <p>Breakeven = (mi_adj × custo/mi) + (itens × 0.33)</p>
             <p>Mínimo = Breakeven × 1.15</p>
           </div>

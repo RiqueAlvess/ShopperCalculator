@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { saveRide, getRidesByDate } from '../lib/db'
 
-const MILES_MULTIPLIER = 1.35
+const MILES_MULTIPLIER = 1.50
 
 async function loadSurplus() {
   const today = new Date().toISOString().slice(0, 10)
