@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { adjustedCosts, GAS_BUFFER, MAINTENANCE_BUFFER, ITEM_TIME_BUFFER, calcItemCost } from '../lib/costBuffers'
+import { adjustedCosts, GAS_BUFFER, MAINTENANCE_BUFFER } from '../lib/costBuffers'
 
 export default function Settings({ settings, updateSetting, costs }) {
   const [local, setLocal] = useState({ ...settings })
@@ -8,7 +8,7 @@ export default function Settings({ settings, updateSetting, costs }) {
   useEffect(() => { setLocal({ ...settings }) }, [settings])
 
   const handleSave = async () => {
-    const keys = ['gasPrice','mpg','maintenanceCost','maintenanceFreqMonths','dailyGoal','weeklyGoal','monthlyGoal','avgSecondsPerItem','hourlyRate']
+    const keys = ['gasPrice','mpg','maintenanceCost','maintenanceFreqMonths','dailyGoal','weeklyGoal','monthlyGoal']
     await Promise.all(keys.map((k) => updateSetting(k, local[k])))
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
@@ -41,26 +41,6 @@ export default function Settings({ settings, updateSetting, costs }) {
         </div>
       </Section>
 
-      <Section label="Tempo & Produtividade">
-        <Field label="Segundos por item (média)" suffix="seg" value={local.avgSecondsPerItem} onChange={(v) => set('avgSecondsPerItem', v)} />
-        <Field label="Valor hora desejado"        prefix="$"  suffix="/hr" value={local.hourlyRate} onChange={(v) => set('hourlyRate', v)} />
-
-        <div className="pt-1 space-y-2">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-uber-muted">Segundos ajustados (+{Math.round(ITEM_TIME_BUFFER*100)}%)</span>
-            <span className="text-white font-semibold">{((parseFloat(local.avgSecondsPerItem)||0)*(1+ITEM_TIME_BUFFER)).toFixed(0)}s</span>
-          </div>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-uber-muted">Custo de tempo / item</span>
-            <span className="text-white font-semibold">${(calcItemCost(parseFloat(local.avgSecondsPerItem)||0, parseFloat(local.hourlyRate)||1) - 0.30).toFixed(4)}</span>
-          </div>
-          <div className="flex justify-between items-center pt-1 border-t border-uber-border">
-            <span className="text-sm text-uber-sub font-semibold">Custo total / item</span>
-            <span className="text-uber-green font-black text-xl">${calcItemCost(parseFloat(local.avgSecondsPerItem)||0, parseFloat(local.hourlyRate)||1).toFixed(4)}</span>
-          </div>
-        </div>
-      </Section>
-
       <Section label="Metas Financeiras">
         <Field label="Meta diária"  prefix="$" value={local.dailyGoal}   onChange={(v) => set('dailyGoal', v)} />
         <Field label="Meta semanal" prefix="$" value={local.weeklyGoal}  onChange={(v) => set('weeklyGoal', v)} />
@@ -82,8 +62,7 @@ export default function Settings({ settings, updateSetting, costs }) {
           <InfoRow label="Margem manutenção" value={`+${Math.round(MAINTENANCE_BUFFER*100)}%`} />
           <div className="border-t border-uber-border pt-3 space-y-2 text-[12px] text-uber-muted font-mono">
             <p>Milhas ajustadas = mi × 1.20</p>
-            <p>Custo/item = (seg × 1.15 × $/s) + $0.30</p>
-            <p>Breakeven = (mi_adj × 1.31) + (itens × custo/item)</p>
+            <p>Breakeven = (mi_adj × 1.31) + (itens × 0.30)</p>
             <p>Mínimo = Breakeven × 1.15</p>
           </div>
           <p className="text-[11px] text-zinc-700 pt-1">Dados salvos localmente — funciona offline.</p>
