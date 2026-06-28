@@ -132,13 +132,13 @@ export default function Calculator({ costs }) {
           )}
           <div className="flex items-center justify-center gap-4 pt-3 border-t border-uber-border mt-3">
             <div className="text-center">
-              <p className="text-[22px] font-black text-white">~{estimatedMins} min</p>
+              <p className="text-[22px] font-black text-white">~{String(Math.floor(estimatedMins/60)).padStart(2,'0')}:{String(estimatedMins%60).padStart(2,'0')}</p>
               <p className="text-[10px] text-uber-muted font-semibold uppercase tracking-wider">tempo estimado</p>
             </div>
             <div className="w-px h-8 bg-uber-border"/>
             <div className="text-center">
-              <p className="text-[13px] font-semibold text-uber-sub">{driveMins} min dirigindo</p>
-              <p className="text-[13px] font-semibold text-uber-sub">{shopMins} min na loja</p>
+              <p className="text-[13px] font-semibold text-uber-sub">{String(Math.floor(driveMins/60)).padStart(2,'0')}:{String(driveMins%60).padStart(2,'0')} dirigindo</p>
+              <p className="text-[13px] font-semibold text-uber-sub">{String(Math.floor(shopMins/60)).padStart(2,'0')}:{String(shopMins%60).padStart(2,'0')} na loja</p>
             </div>
           </div>
         </div>
